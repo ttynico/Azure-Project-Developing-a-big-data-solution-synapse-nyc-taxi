@@ -16,7 +16,7 @@ if [ ! -f .synapse_project_config ]; then
 fi
 source .synapse_project_config
 
-PUBLIC_SOURCE="https://azureopendatastorage.blob.core.windows.net/nyctlc/yellow/puYear=2022/puMonth=1/"
+PUBLIC_SOURCE="https://azureopendatastorage.blob.core.windows.net/nyctlc/yellow/puYear=2018/puMonth=6/"
 
 echo "==> Checking azcopy is installed"
 if ! command -v azcopy &> /dev/null; then
@@ -40,13 +40,13 @@ SAS_TOKEN=$(az storage container generate-sas \
   --expiry "$EXPIRY" \
   -o tsv)
 
-DEST_URL="https://${STORAGE_ACCOUNT}.blob.core.windows.net/raw/yellow_2022_01?${SAS_TOKEN}"
+DEST_URL="https://${STORAGE_ACCOUNT}.blob.core.windows.net/raw/yellow_2018_06?${SAS_TOKEN}"
 
 echo "==> Copying January 2022 Yellow Taxi data (public source -> your raw container)"
 azcopy copy "$PUBLIC_SOURCE" "$DEST_URL" --recursive
 
 echo ""
-echo "==> Done. Data copied to: https://${STORAGE_ACCOUNT}.blob.core.windows.net/raw/yellow_2022_01"
+echo "==> Done. Data copied to: https://${STORAGE_ACCOUNT}.blob.core.windows.net/raw/yellow_2018_06"
 echo ""
 echo "Next: open Synapse Studio, connect to the Built-in serverless SQL pool,"
 echo "and run sql/01_create_external_objects.sql"
