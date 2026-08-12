@@ -4,6 +4,7 @@
 # own ADLS Gen2 "raw" container, via a service-to-service azcopy transfer
 # (the data never touches your local machine).
 set -euo pipefail
+export MSYS_NO_PATHCONV=1
 
 if [ ! -f .synapse_project_config ]; then
   echo "ERROR: .synapse_project_config not found. Run setup/create_resources.sh first."

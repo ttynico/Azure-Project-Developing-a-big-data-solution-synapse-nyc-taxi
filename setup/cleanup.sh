@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tears down all resources created by create_resources.sh.
 set -euo pipefail
+export MSYS_NO_PATHCONV=1
 
 if [ ! -f .synapse_project_config ]; then
   echo "ERROR: .synapse_project_config not found. Nothing to clean up, or you're in the wrong directory."

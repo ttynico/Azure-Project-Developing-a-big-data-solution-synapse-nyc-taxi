@@ -3,6 +3,10 @@
 # NYC Taxi big data solution. Run one section at a time.
 set -euo pipefail
 
+# Prevent Git Bash/MSYS from mangling /subscriptions/... paths into
+# Windows-style paths, which silently corrupts --scope arguments.
+export MSYS_NO_PATHCONV=1
+
 RESOURCE_GROUP="rg-synapse-nyc-taxi"
 LOCATION="centralus"
 SUFFIX=$(openssl rand -hex 3)
