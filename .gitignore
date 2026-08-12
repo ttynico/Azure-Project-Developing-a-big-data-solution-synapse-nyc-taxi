@@ -1,0 +1,6 @@
+# Generated secrets / config
+.synapse_sql_admin_password
+.synapse_project_config
+
+# OS
+.DS_Store
