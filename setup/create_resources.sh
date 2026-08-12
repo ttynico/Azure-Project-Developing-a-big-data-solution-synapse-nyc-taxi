@@ -4,7 +4,7 @@
 set -euo pipefail
 
 RESOURCE_GROUP="rg-synapse-nyc-taxi"
-LOCATION="eastus"
+LOCATION="centralus"
 SUFFIX=$(openssl rand -hex 3)
 STORAGE_ACCOUNT="synapsenyctaxi${SUFFIX}"
 FILESYSTEM_NAME="raw"
