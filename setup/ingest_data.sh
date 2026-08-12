@@ -16,7 +16,7 @@ if [ ! -f .synapse_project_config ]; then
 fi
 source .synapse_project_config
 
-PUBLIC_SOURCE="https://azureopendatastorage.blob.core.windows.net/nyctlc/yellow/puYear=2022/puMonth=1/*.parquet"
+PUBLIC_SOURCE="https://azureopendatastorage.blob.core.windows.net/nyctlc/yellow/puYear=2022/puMonth=1/"
 
 echo "==> Checking azcopy is installed"
 if ! command -v azcopy &> /dev/null; then
