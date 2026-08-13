@@ -128,3 +128,94 @@ bash setup/cleanup.sh
 - Pay-per-query cost model vs. always-on compute — a deliberate contrast to
   the online endpoint cost lessons in Project 11
 - T-SQL analytics over a realistic multi-hundred-thousand-row dataset
+
+## Troubleshooting notes (from actually building this)
+
+Getting this working end to end surfaced nine distinct real issues, in order:
+
+**1. `SqlServerRegionDoesNotAllowProvisioning` in `eastus`**
+Some subscriptions (particularly trial/pay-as-you-go) are capacity-restricted
+from provisioning new SQL Server resources in certain popular regions.
+Synapse workspaces provision a SQL Server under the hood even for the
+serverless-only pool. Fix: switch to `centralus`, which was open.
+
+**2. Git Bash / MSYS mangles `/subscriptions/...` paths**
+Any `az` command with a `--scope` argument starting with `/subscriptions/`
+gets silently corrupted by Git Bash's automatic path conversion on Windows,
+producing a cryptic `MissingSubscription` error with no indication of the
+real cause. Fix: `export MSYS_NO_PATHCONV=1` at the top of any script that
+passes ARM resource IDs as CLI arguments.
+
+**3. `azcopy login`'s device-code flow rejects personal Microsoft accounts**
+`az login` accepts personal (e.g. Gmail-linked) Microsoft accounts fine, but
+`azcopy login`'s interactive AAD device-code flow explicitly refuses them
+("You can't sign in here with a personal account"). Fix: skip `azcopy login`
+entirely and authenticate via a SAS token generated through `az storage
+container generate-sas` instead.
+
+**4. `azcopy` only allows wildcards as a trailing `/*` on a folder**
+`.../puMonth=1/*.parquet` (wildcard mid-path, matching a filename pattern)
+is rejected outright. Fix: point at the folder itself
+(`.../puMonth=1/`) with `--recursive`, which also preserves the source's
+internal folder structure rather than flattening it - worth checking with
+`azcopy list` on both source and destination rather than assuming a flat
+copy.
+
+**5. The requested dataset year didn't exist in the public source**
+`puYear=2022/puMonth=1` returned zero files - Microsoft's NYC TLC Azure
+Open Dataset mirror doesn't extend that far. Fix: verified actual available
+data with `azcopy list` first, landed on `puYear=2018/puMonth=6` (confirmed
+present, matches Microsoft's own tutorial examples).
+
+**6. Serverless SQL uses the *workspace's* managed identity, not the user's**
+Granting your own Azure AD user `Storage Blob Data Contributor` isn't
+enough - Synapse's serverless SQL pool authenticates to storage using the
+*workspace's* managed identity (a separate service principal) when using
+AAD passthrough. Even after granting both identities the role, AAD
+passthrough queries still returned "no datasets found" (likely RBAC
+propagation delay, or another AAD-related restriction on personal-account
+tenants similar to issue #3) - ultimately abandoned AAD passthrough
+entirely in favor of the SAS-token pattern from issue #3, applied here too.
+
+**7. `CREATE DATABASE SCOPED CREDENTIAL` syntax has no parentheses after `WITH`**
+Unlike `CREATE EXTERNAL DATA SOURCE`, which does use `WITH ( ... )`,
+`CREATE DATABASE SCOPED CREDENTIAL` uses `WITH IDENTITY = ..., SECRET = ...`
+with no wrapping parentheses. Easy to get wrong by pattern-matching the
+adjacent statement.
+
+**8. Database scoped credentials require a master key first**
+`CREATE MASTER KEY ENCRYPTION BY PASSWORD = '...'` must run before any
+`CREATE DATABASE SCOPED CREDENTIAL` in that database, or the credential
+creation fails with "Please create a master key in the database."
+
+**9. Parquet column names/types don't match documentation examples**
+This 2018-vintage file uses lowercase `puLocationId`/`doLocationId` (not
+the PascalCase `PULocationID`/`DOLocationID` shown in newer Microsoft
+tutorials), and stores `vendorID`, `paymentType`, `puLocationId`,
+`doLocationId`, and `rateCodeId` as strings (Parquet `BYTE_ARRAY`/`UTF8`)
+despite the values looking purely numeric. An external table with an `INT`
+column for these doesn't fail at creation time - it silently returns NULL
+for every row until you actually query that column, which is when the real
+"not compatible with external data type" error surfaces. **Always verify
+actual column names and types with `SELECT TOP 0 * FROM OPENROWSET(...)`
+against the real file before writing an external table schema** - don't
+trust column names/casing from documentation or tutorials for a different
+dataset vintage.
+
+**10. CETAS needs separate write permissions**
+The read-only SAS token (permissions `rl`) used for querying doesn't cover
+`CREATE EXTERNAL TABLE ... AS SELECT` (CETAS), which needs to write the
+output Parquet file back to the container. Fails with "Access check for
+'CREATE/WRITE' operation ... failed." Fix: generate a second SAS token with
+`rlacw` permissions and a separate credential/data source, rather than
+widening the original read-only one - keeps the read path minimally
+privileged.
+
+**Lesson**: this project needed far more real debugging than a typical
+"follow the tutorial" build - region restrictions, shell quirks, auth
+model mismatches, T-SQL syntax gotchas, and dataset-specific schema
+surprises all showed up in a single afternoon. The recurring theme: verify
+actual state (`azcopy list`, `SELECT TOP 0 * FROM OPENROWSET`) rather than
+trusting what documentation or a first attempt assumed - most of these
+issues surfaced as a working-looking query that silently returned wrong
+results (0 rows, NULL columns) rather than a clear error.
