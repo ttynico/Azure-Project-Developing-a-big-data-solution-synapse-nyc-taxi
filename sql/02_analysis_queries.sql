@@ -5,10 +5,12 @@
 -- Run after 01_create_external_objects.sql. Each query scans only the
 -- Parquet columns it references (columnar pruning), keeping the amount of
 -- data scanned - and therefore the cost - low even against millions of rows.
+--
+-- Note: puLocationId, doLocationId, rateCodeId, and paymentType are all
+-- VARCHAR in this table (the underlying Parquet stores them as strings
+-- despite looking numeric) - cast to INT where numeric sorting/comparison
+-- is needed.
 -- =============================================================================
-
-USE nyc_taxi_db;
-GO
 
 -- 1. Trip volume by day of month
 SELECT
@@ -17,7 +19,6 @@ SELECT
 FROM dbo.YellowTaxiTrips
 GROUP BY CAST(tpepPickupDateTime AS DATE)
 ORDER BY trip_date;
-GO
 
 -- 2. Average fare and trip distance by hour of day
 SELECT
@@ -26,13 +27,14 @@ SELECT
     AVG(fareAmount) AS avg_fare,
     AVG(tripDistance) AS avg_distance_miles
 FROM dbo.YellowTaxiTrips
-WHERE fareAmount > 0 AND tripDistance > 0  -- exclude bad/void records
+WHERE fareAmount > 0 AND tripDistance > 0
 GROUP BY DATEPART(HOUR, tpepPickupDateTime)
 ORDER BY pickup_hour;
-GO
 
 -- 3. Tip percentage by payment type
--- paymentType: 1 = credit card, 2 = cash, 3 = no charge, 4 = dispute
+-- paymentType: '1' = credit card, '2' = cash, '3' = no charge, '4' = dispute
+-- Cash tips aren't recorded in the trip data, so type '2' shows ~0% here -
+-- that's a real characteristic of the dataset, not a query bug.
 SELECT
     paymentType,
     COUNT(*) AS trip_count,
@@ -43,22 +45,20 @@ FROM dbo.YellowTaxiTrips
 WHERE fareAmount > 0
 GROUP BY paymentType
 ORDER BY paymentType;
-GO
 
 -- 4. Top 10 busiest pickup zones
 SELECT TOP 10
-    PULocationID,
+    CAST(puLocationId AS INT) AS puLocationId,
     COUNT(*) AS pickup_count,
     AVG(totalAmount) AS avg_total_fare
 FROM dbo.YellowTaxiTrips
-GROUP BY PULocationID
+GROUP BY puLocationId
 ORDER BY pickup_count DESC;
-GO
 
 -- 5. Trip duration vs. fare - flag likely data quality issues
 -- (very short trips with high fares, or long trips with $0 fare)
 SELECT
-    VendorID,
+    vendorID,
     tpepPickupDateTime,
     tpepDropoffDateTime,
     DATEDIFF(MINUTE, tpepPickupDateTime, tpepDropoffDateTime) AS duration_minutes,
@@ -69,7 +69,6 @@ WHERE
     (DATEDIFF(MINUTE, tpepPickupDateTime, tpepDropoffDateTime) < 2 AND fareAmount > 50)
     OR (DATEDIFF(MINUTE, tpepPickupDateTime, tpepDropoffDateTime) > 60 AND fareAmount = 0)
 ORDER BY fareAmount DESC;
-GO
 
 -- 6. CETAS example: write a curated, aggregated dataset back to the data
 -- lake in Parquet format - demonstrates using serverless SQL as a
@@ -77,7 +76,7 @@ GO
 CREATE EXTERNAL TABLE dbo.DailyTripSummary
 WITH (
     LOCATION = 'daily_trip_summary/',
-    DATA_SOURCE = nyc_taxi_raw,   -- points at raw; swap for a "curated" data source in production
+    DATA_SOURCE = nyc_taxi_raw,
     FILE_FORMAT = parquet_format
 )
 AS
@@ -88,4 +87,3 @@ SELECT
     SUM(totalAmount) AS total_revenue
 FROM dbo.YellowTaxiTrips
 GROUP BY CAST(tpepPickupDateTime AS DATE);
-GO

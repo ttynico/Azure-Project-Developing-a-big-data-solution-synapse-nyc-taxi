@@ -4,11 +4,9 @@
 -- Sets up the objects needed to query the ingested NYC Taxi Parquet files
 -- from the serverless SQL pool. Run each statement as its own batch in
 -- Synapse Studio (select the statement, then Run) rather than the whole
--- file at once - CREATE DATABASE and database-scoped objects can't always
--- share a batch with the CREATE DATABASE statement itself.
+-- file at once.
 --
--- Replace <STORAGE_ACCOUNT> with your real storage account name
--- (also saved in .synapse_project_config) before running.
+-- Replace <STORAGE_ACCOUNT> and <SAS_TOKEN> before running.
 -- =============================================================================
 
 -- Step 1: create a dedicated database, then switch the Studio "Use database"
@@ -42,9 +40,18 @@ WITH (
 
 -- Step 5: sanity check. Note the nested puMonth=6/ folder - azcopy's
 -- --recursive copy preserved the source's internal partition structure
--- (puYear=2018/puMonth=6/) rather than flattening it into yellow_2018_06/
--- directly. Always verify actual paths with `azcopy list` rather than
--- assuming a flat structure.
+-- (puYear=2018/puMonth=6/) rather than flattening it. Always verify actual
+-- paths with `azcopy list` rather than assuming a flat structure.
+--
+-- Also worth checking real column names/types before writing a schema:
+-- SELECT TOP 0 * FROM OPENROWSET(...) - this 2018 file uses lowercase
+-- puLocationId/doLocationId (not PascalCase PULocationID/DOLocationID as
+-- Microsoft's own newer tutorials show), and stores paymentType,
+-- puLocationId, doLocationId, and rateCodeId as strings (BYTE_ARRAY/UTF8)
+-- despite the values looking numeric - an external table with an INT
+-- column for these silently returns NULL for every row rather than
+-- erroring, and only throws "not compatible with external data type"
+-- once you actually query that column. Cast to INT in queries as needed.
 SELECT TOP 10 *
 FROM OPENROWSET(
     BULK 'yellow_2018_06/puMonth=6/*.parquet',
@@ -52,24 +59,30 @@ FROM OPENROWSET(
     FORMAT = 'PARQUET'
 ) AS rows_preview;
 
--- Step 6: external table with an explicit schema for repeated querying.
+-- Step 6: external table with the verified schema (confirmed via
+-- SELECT TOP 0 * against the real file - don't assume column names/casing
+-- from documentation examples, they vary by dataset vintage).
 CREATE EXTERNAL TABLE dbo.YellowTaxiTrips (
-    VendorID              INT,
+    vendorID              INT,
     tpepPickupDateTime     DATETIME2,
     tpepDropoffDateTime    DATETIME2,
     passengerCount          INT,
     tripDistance             FLOAT,
-    RatecodeID              INT,
+    puLocationId            VARCHAR(10),
+    doLocationId            VARCHAR(10),
+    startLon                 FLOAT,
+    startLat                 FLOAT,
+    endLon                   FLOAT,
+    endLat                   FLOAT,
+    rateCodeId               VARCHAR(10),
     storeAndFwdFlag         VARCHAR(3),
-    PULocationID            INT,
-    DOLocationID            INT,
-    paymentType              INT,
+    paymentType              VARCHAR(10),
     fareAmount               FLOAT,
     extra                    FLOAT,
     mtaTax                  FLOAT,
+    improvementSurcharge    FLOAT,
     tipAmount                FLOAT,
     tollsAmount               FLOAT,
-    improvementSurcharge    FLOAT,
     totalAmount               FLOAT
 )
 WITH (
@@ -78,7 +91,5 @@ WITH (
     FILE_FORMAT = parquet_format
 );
 
--- Confirm row count landed as expected (June 2018 Yellow Taxi is
--- roughly 9 million trips across the full month; the 20 files we
--- ingested should total in that range).
+-- Confirm row count (June 2018 Yellow Taxi, 20 ingested files): ~8.7M rows.
 SELECT COUNT(*) AS total_trips FROM dbo.YellowTaxiTrips;
