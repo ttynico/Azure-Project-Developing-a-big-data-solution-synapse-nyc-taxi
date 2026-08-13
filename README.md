@@ -1,6 +1,6 @@
 # Big Data Solution — Azure Synapse Serverless SQL + Data Lake
 
-**Project 10** — a data lake analytics solution built with Azure Synapse Analytics
+A data lake analytics solution built with Azure Synapse Analytics
 **serverless SQL pool**, querying NYC Taxi trip data (Parquet) directly from Azure
 Data Lake Storage Gen2 using T-SQL — no cluster, no data warehouse load, no
 always-on compute.
