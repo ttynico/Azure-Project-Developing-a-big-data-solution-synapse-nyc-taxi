@@ -63,7 +63,7 @@ FROM OPENROWSET(
 -- SELECT TOP 0 * against the real file - don't assume column names/casing
 -- from documentation examples, they vary by dataset vintage).
 CREATE EXTERNAL TABLE dbo.YellowTaxiTrips (
-    vendorID              INT,
+    vendorID              VARCHAR(10),
     tpepPickupDateTime     DATETIME2,
     tpepDropoffDateTime    DATETIME2,
     passengerCount          INT,

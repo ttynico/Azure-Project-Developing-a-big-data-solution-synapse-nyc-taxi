@@ -6,10 +6,10 @@
 -- Parquet columns it references (columnar pruning), keeping the amount of
 -- data scanned - and therefore the cost - low even against millions of rows.
 --
--- Note: puLocationId, doLocationId, rateCodeId, and paymentType are all
--- VARCHAR in this table (the underlying Parquet stores them as strings
--- despite looking numeric) - cast to INT where numeric sorting/comparison
--- is needed.
+-- Note: vendorID, puLocationId, doLocationId, rateCodeId, and paymentType
+-- are all VARCHAR in this table (the underlying Parquet stores them as
+-- strings despite looking numeric) - cast to INT where numeric
+-- sorting/comparison is needed.
 -- =============================================================================
 
 -- 1. Trip volume by day of month
@@ -56,7 +56,9 @@ GROUP BY puLocationId
 ORDER BY pickup_count DESC;
 
 -- 5. Trip duration vs. fare - flag likely data quality issues
--- (very short trips with high fares, or long trips with $0 fare)
+-- (very short trips with high fares, or long trips with $0 fare).
+-- Real result from this dataset: a $999.99 fare for a 1-minute,
+-- 1.5-mile trip - almost certainly a data entry error, not a real fare.
 SELECT
     vendorID,
     tpepPickupDateTime,
@@ -70,13 +72,33 @@ WHERE
     OR (DATEDIFF(MINUTE, tpepPickupDateTime, tpepDropoffDateTime) > 60 AND fareAmount = 0)
 ORDER BY fareAmount DESC;
 
--- 6. CETAS example: write a curated, aggregated dataset back to the data
--- lake in Parquet format - demonstrates using serverless SQL as a
--- lightweight transformation engine, not just a read-only query tool.
+-- 6. CETAS: write a curated, aggregated dataset back to the data lake in
+-- Parquet format - demonstrates using serverless SQL as a lightweight
+-- transformation engine, not just a read-only query tool.
+--
+-- CETAS needs WRITE access to the destination container. The read-only
+-- SAS credential from 01_create_external_objects.sql only had 'rl'
+-- (read+list) permissions, which is enough for querying but fails with
+-- "Access check for 'CREATE/WRITE' operation ... failed" on CETAS. Create
+-- a second credential/data source with write access rather than widening
+-- the original one, so the read path stays minimally privileged.
+--
+-- Generate this token with --permissions rlacw (read, list, add, create,
+-- write) instead of --permissions rl:
+CREATE DATABASE SCOPED CREDENTIAL nyc_taxi_sas_cred_rw
+WITH IDENTITY = 'SHARED ACCESS SIGNATURE',
+SECRET = '<SAS_TOKEN_WITH_WRITE_PERMISSIONS>';
+
+CREATE EXTERNAL DATA SOURCE nyc_taxi_raw_rw
+WITH (
+    LOCATION = 'https://<STORAGE_ACCOUNT>.blob.core.windows.net/raw',
+    CREDENTIAL = nyc_taxi_sas_cred_rw
+);
+
 CREATE EXTERNAL TABLE dbo.DailyTripSummary
 WITH (
     LOCATION = 'daily_trip_summary/',
-    DATA_SOURCE = nyc_taxi_raw,
+    DATA_SOURCE = nyc_taxi_raw_rw,
     FILE_FORMAT = parquet_format
 )
 AS
@@ -87,3 +109,6 @@ SELECT
     SUM(totalAmount) AS total_revenue
 FROM dbo.YellowTaxiTrips
 GROUP BY CAST(tpepPickupDateTime AS DATE);
+
+-- Confirm the write-back worked
+SELECT TOP 5 * FROM dbo.DailyTripSummary ORDER BY trip_date;
