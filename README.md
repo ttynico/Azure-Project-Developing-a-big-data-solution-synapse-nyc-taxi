@@ -40,6 +40,29 @@ NYC TLC public dataset (Azure Open Datasets)
 - **Familiar tooling.** Standard T-SQL, works with existing BI tools (Power BI,
   SSMS, Azure Data Studio) via the serverless SQL endpoint.
 
+## Results
+
+8.7 million real NYC taxi trips, queried directly from Parquet files in the
+data lake via serverless SQL - no cluster, no data load, no always-on cost.
+
+![Row count](docs/screenshots/synapse___________.jpg)
+*8,714,177 trips confirmed via `SELECT COUNT(*)` against the external table.*
+
+![Tip percentage by payment type](docs/screenshots/synapse______________.jpg)
+*Credit card trips average ~24% tips; cash trips show ~0% - cash tips
+aren't captured in the trip data, a real characteristic of the dataset.*
+
+![Busiest pickup zones](docs/screenshots/synapse_______________.jpg)
+*Top pickup zones by trip volume, aggregated from 8.7M rows.*
+
+![CETAS write-back confirmation](docs/screenshots/synapse_________________.jpg)
+*`CREATE EXTERNAL TABLE ... AS SELECT` (CETAS) used to write an aggregated
+daily summary back to the data lake in Parquet format - serverless SQL as
+a lightweight transformation engine, not just a read-only query tool.*
+
+More screenshots covering the full build (including the real debugging
+trail) are in [`docs/screenshots/`](docs/screenshots/).
+
 ## Repo structure
 
 ```
