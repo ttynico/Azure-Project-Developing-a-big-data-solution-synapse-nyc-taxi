@@ -42,7 +42,7 @@ SAS_TOKEN=$(az storage container generate-sas \
 
 DEST_URL="https://${STORAGE_ACCOUNT}.blob.core.windows.net/raw/yellow_2018_06?${SAS_TOKEN}"
 
-echo "==> Copying January 2022 Yellow Taxi data (public source -> your raw container)"
+echo "==> Copying June 2018 Yellow Taxi data (public source -> your raw container)"
 azcopy copy "$PUBLIC_SOURCE" "$DEST_URL" --recursive
 
 echo ""
