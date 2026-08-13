@@ -70,6 +70,13 @@ az role assignment create \
   --role "Storage Blob Data Contributor" \
   --scope "$STORAGE_ID"
 
+echo "==> Granting the Synapse workspace managed identity Storage Blob Data Contributor"
+WORKSPACE_PRINCIPAL_ID=$(az synapse workspace show --name "$SYNAPSE_WORKSPACE" --resource-group "$RESOURCE_GROUP" --query identity.principalId -o tsv)
+az role assignment create \
+  --assignee "$WORKSPACE_PRINCIPAL_ID" \
+  --role "Storage Blob Data Contributor" \
+  --scope "$STORAGE_ID"
+
 # Save config for the other scripts to reuse without re-typing generated names.
 cat > .synapse_project_config << EOF
 RESOURCE_GROUP=$RESOURCE_GROUP
