@@ -6,7 +6,7 @@
 -- at the "raw" container, a Parquet file format, and an external table.
 --
 -- Run against the Built-in serverless SQL pool in Synapse Studio.
--- Replace <STORAGE_ACCOUNT> with the value printed by create_resources.sh
+-- Replace synapsenyctaxi2922ed with the value printed by create_resources.sh
 -- (also saved in .synapse_project_config).
 -- =============================================================================
 
@@ -23,7 +23,7 @@ GO
 -- rather than a storage key, so no secret is stored in the script.
 CREATE EXTERNAL DATA SOURCE nyc_taxi_raw
 WITH (
-    LOCATION = 'https://<STORAGE_ACCOUNT>.dfs.core.windows.net/raw'
+    LOCATION = 'https://synapsenyctaxi2922ed.dfs.core.windows.net/raw'
 );
 GO
 
